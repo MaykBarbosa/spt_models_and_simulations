@@ -10,3 +10,5 @@ numpy
 scipy
 matplotlib
 seaborn
+xbbg
+python-dotenv
