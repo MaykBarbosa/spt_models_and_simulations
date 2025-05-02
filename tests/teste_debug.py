@@ -18,19 +18,6 @@ import warnings
 # Suppress all warnings
 warnings.filterwarnings("ignore")
 
-
-
-
-#S&P composition 2014-2024
-sp500_comp = pd.read_csv(os.path.join(os.environ['FILES_PATH'], 'sp500\sP_500_comp.csv'), sep=';')
-sp500_comp['ticker'] = sp500_comp['ticker'].str.strip()
-sp500_comp['ticker'] = sp500_comp['ticker'] + ' US Equity'
-sp500_comp['date'] = pd.to_datetime(sp500_comp['date'])
-sp500_comp['is_SP500'] = True
-sp500_ticker_list = sp500_comp['ticker'].unique()
-sp500_comp.head(3)
-
-
 BBG_HIST_FIELDS = {'PX_LAST':'px_close',
                 'PX_VOLUME':'volume',
                 'PX_OPEN':'px_open',
@@ -41,12 +28,30 @@ BBG_HIST_FIELDS = {'PX_LAST':'px_close',
                 'EQY_FREE_FLOAT_PCT':'free_float_pct',
                 'EQY_SH_OUT':'shares_outstanding'}
 
+#Calendário
+calendario =  pd.read_csv(os.path.join(os.environ['FILES_PATH'], 'sp500\working_days_calendar.csv'), sep=',')
+calendario = calendario[(calendario['code']=='cme') & (calendario['workingday']==1)]
+calendario['date'] = pd.to_datetime(calendario['date'])
 
 
+missing_prices_dates = [ pd.to_datetime(item) for item in ['2004-06-11','2012-10-29', '2012-10-30','2020-11-26']]
 
-sp500_prices= pd.read_csv(os.path.join(os.environ['FILES_PATH'], "sp500\SP_500_prices.csv"),index_col=0) 
-sp500_prices['date'] =  pd.to_datetime(sp500_prices['date'])
-sp500_prices.head(3)
+
+#S&P composition 2014-2024
+sp500_comp = pd.read_csv(os.path.join(os.environ['FILES_PATH'], 'sp500\sP_500_comp.csv'), sep=';')
+sp500_comp['ticker'] = sp500_comp['ticker'].str.strip()
+sp500_comp['ticker'] = sp500_comp['ticker'] + ' US Equity'
+sp500_comp['date'] = pd.to_datetime(sp500_comp['date'])
+sp500_comp['is_SP500'] = True
+sp500_ticker_list = sp500_comp['ticker'].unique()
+sp500_comp = sp500_comp[sp500_comp['date'].isin(calendario['date'])]
+sp500_comp = sp500_comp[~sp500_comp['date'].isin(missing_prices_dates)]
+
+
+sp500_stock_data= pd.read_csv(os.path.join(os.environ['FILES_PATH'], "sp500\SP_500_prices.csv"),index_col=0) 
+sp500_stock_data['date'] =  pd.to_datetime(sp500_stock_data['date'])
+sp500_stock_data = sp500_stock_data[sp500_stock_data['date'].isin(calendario['date'])] 
+sp500_stock_data = sp500_stock_data[~sp500_stock_data['date'].isin(missing_prices_dates) ] #Removendo datas
 
 
 spx_index  = pd.read_csv(os.path.join(os.environ['FILES_PATH'], "sp500\SP_500_index.csv"), index_col=0)
@@ -54,168 +59,215 @@ spx_index.columns = ['date', 'ticker','PX_LAST','PX_VOLUME','PX_OPEN','PX_HIGH',
 
 
 spx_index = spx_index[['date', 'PX_LAST']]
+spx_index['date'] = pd.to_datetime(spx_index['date']) 
+
+
+spx_index = spx_index[spx_index['date'].isin(calendario['date'])] 
+spx_index = spx_index[~spx_index['date'].isin(missing_prices_dates)]  #removendo datas
+
+
 spx_index.set_index("date",inplace=True)
 spx_index.rename(columns={'PX_LAST':'spx_index'},inplace=True)
 spx_index.index = pd.to_datetime(spx_index.index) 
 
 
-#Ações consideradas para trabalhar com banco de dados balanceado
-stocks = ['CCL US Equity','KO US Equity','ITW US Equity','WAT US Equity','PWR US Equity','MS US Equity','HAL US Equity','HSY US Equity','BF/B US Equity',
-          'HIG US Equity','GRMN US Equity','LLY US Equity','TRV US Equity','MDLZ US Equity','SWK US Equity','ACN US Equity','BRK/B US Equity','UHS US Equity',
-          'AN US Equity','CB US Equity','COST US Equity','ETN US Equity','HON US Equity','IT US Equity','MSI US Equity','AMGN US Equity','BLK US Equity',
-          'CSCO US Equity','CVX US Equity','FIS US Equity','GEN US Equity','JNJ US Equity','K US Equity','MTB US Equity','TAP US Equity','WAB US Equity',
-          'XRX US Equity','A US Equity','AA US Equity','AAP US Equity','AAPL US Equity','ABT US Equity','ACGL US Equity','ADBE US Equity','ADI US Equity',
-          'ADM US Equity','ADP US Equity','ADSK US Equity','AEE US Equity','AEP US Equity','AES US Equity','AFL US Equity','AIG US Equity','AIV US Equity',
-          'AJG US Equity','AKAM US Equity','ALB US Equity','ALGN US Equity','ALK US Equity','ALL US Equity','AMAT US Equity','AMD US Equity','AME US Equity',
-          'AMG US Equity','AMT US Equity','AMZN US Equity','ANSS US Equity','AON US Equity','AOS US Equity','APA US Equity','APD US Equity','APH US Equity',
-          'ARE US Equity','ATI US Equity','ATO US Equity','AVB US Equity','AVY US Equity','AXON US Equity','AXP US Equity','AYI US Equity','AZO US Equity',
-          'BA US Equity','BAC US Equity','BALL US Equity','BAX US Equity','BBWI US Equity','BBY US Equity','BDX US Equity','BEN US Equity','BFH US Equity',
-          'BG US Equity','BIIB US Equity','BIO US Equity','BK US Equity','BKNG US Equity','BKR US Equity','BMY US Equity','BRO US Equity','BSX US Equity',
-          'BWA US Equity','BXP US Equity','C US Equity','CAG US Equity','CAH US Equity','CAT US Equity','CCEP US Equity','CCI US Equity','CDNS US Equity',
-          'CHD US Equity','CHRW US Equity','CI US Equity','CINF US Equity','CL US Equity','CLF US Equity','CLX US Equity','CMA US Equity','CMCSA US Equity',
-          'CME US Equity','CMI US Equity','CMS US Equity','CNC US Equity','CNP US Equity','CNX US Equity','COF US Equity','COO US Equity',
-          'COP US Equity','COR US Equity','CPB US Equity','CPRT US Equity','CPT US Equity','CRL US Equity','CSGP US Equity','CSX US Equity','CTAS US Equity',
-          'CTRA US Equity','CTSH US Equity','CVS US Equity','D US Equity','DD US Equity','DE US Equity','DECK US Equity','DGX US Equity',
-          'DHI US Equity','DHR US Equity','DIS US Equity','DLTR US Equity','DOC US Equity','DOV US Equity','DRI US Equity','DTE US Equity',
-          'DUK US Equity','DVA US Equity','DVN US Equity','EA US Equity','EBAY US Equity','ECL US Equity','ED US Equity','EFX US Equity','EG US Equity',
-          'EIX US Equity','EL US Equity','ELV US Equity','EMN US Equity','EMR US Equity','EOG US Equity','EQIX US Equity','EQR US Equity','EQT US Equity','ES US Equity',
-          'ESS US Equity','ETR US Equity','EVRG US Equity','EW US Equity','EXC US Equity','EXPD US Equity','F US Equity','FAST US Equity','FCX US Equity',
-          'FDS US Equity','FDX US Equity','FE US Equity','FFIV US Equity','FI US Equity','FICO US Equity','FITB US Equity','FL US Equity','FLR US Equity',
-          'FLS US Equity','FMC US Equity','FOSL US Equity','FRT US Equity','FTI US Equity','GAP US Equity','GD US Equity','GE US Equity','GHC US Equity',
-          'GILD US Equity','GIS US Equity','GL US Equity','GLW US Equity','GME US Equity','GPC US Equity','GPN US Equity','GS US Equity','GT US Equity',
-          'GWW US Equity','HAS US Equity','HBAN US Equity','HD US Equity','HES US Equity','HOG US Equity','HOLX US Equity','HP US Equity','HPQ US Equity',
-          'HRB US Equity','HRL US Equity','HSIC US Equity','HST US Equity','HUBB US Equity','HUM US Equity','IBM US Equity','IDXX US Equity','IEX US Equity',
-          'IFF US Equity','ILMN US Equity','INCY US Equity','INTC US Equity','INTU US Equity','IP US Equity','IPG US Equity','IRM US Equity','ISRG US Equity',
-          'IVZ US Equity','J US Equity','JBHT US Equity','JBL US Equity','JCI US Equity','JEF US Equity','JKHY US Equity','JNPR US Equity','JPM US Equity',
-          'JWN US Equity','KEY US Equity','KIM US Equity','KLAC US Equity','KMB US Equity','KMX US Equity','KR US Equity','KSS US Equity','L US Equity',
-          'LEG US Equity','LEN US Equity','LHX US Equity','LIN US Equity','LKQ US Equity','LMT US Equity','LNC US Equity','LNT US Equity','LOW US Equity',
-          'LRCX US Equity','LUMN US Equity','LUV US Equity','M US Equity','MAA US Equity','MAC US Equity','MAR US Equity','MAS US Equity','MAT US Equity','MCD US Equity',
-          'MCHP US Equity','MCK US Equity','MCO US Equity','MDT US Equity','MET US Equity','MGM US Equity','MHK US Equity','MKC US Equity','MLM US Equity','MMC US Equity',
-          'MMM US Equity','MNST US Equity','MO US Equity','MOH US Equity','MRK US Equity','MSFT US Equity','MTD US Equity','MU US Equity','MUR US Equity','NBR US Equity',
-          'NDAQ US Equity','NDSN US Equity','NEE US Equity','NEM US Equity','NFLX US Equity','NI US Equity','NKE US Equity','NKTR US Equity','NOC US Equity','NOV US Equity',
-          'NRG US Equity','NSC US Equity','NTAP US Equity','NTRS US Equity','NUE US Equity','NVDA US Equity','NVR US Equity','NWL US Equity','O US Equity','ODFL US Equity',
-          'OI US Equity','OKE US Equity','OMC US Equity','ON US Equity','ORCL US Equity','ORLY US Equity','OXY US Equity','PARA US Equity','PAYX US Equity','PBI US Equity',
-          'PCAR US Equity','PCG US Equity','PDCO US Equity','PEG US Equity','PENN US Equity','PEP US Equity','PFE US Equity','PFG US Equity','PG US Equity','PGR US Equity',
-          'PH US Equity','PHM US Equity','PKG US Equity','PLD US Equity','PNC US Equity','PNR US Equity','PNW US Equity','POOL US Equity','PPG US Equity','PPL US Equity',
-          'PRGO US Equity','PRU US Equity','PSA US Equity','PTC US Equity','PVH US Equity','QCOM US Equity','R US Equity','RCL US Equity','REG US Equity','REGN US Equity',
-          'RF US Equity','RHI US Equity','RIG US Equity','RJF US Equity','RL US Equity','RMD US Equity','ROK US Equity','ROL US Equity','ROP US Equity','ROST US Equity',
-          'RRC US Equity','RSG US Equity','RTX US Equity','RVTY US Equity','SBAC US Equity','SBUX US Equity','SCHW US Equity','SEE US Equity','SHW US Equity','SIG US Equity',
-          'SJM US Equity','SLB US Equity','SLG US Equity','SLM US Equity','SNA US Equity','SNPS US Equity','SO US Equity','SPG US Equity','SPGI US Equity','SRE US Equity',
-          'STE US Equity','STLD US Equity','STT US Equity','STX US Equity','STZ US Equity','SWKS US Equity','SYK US Equity','SYY US Equity','T US Equity','TDY US Equity',
-          'TECH US Equity','TER US Equity','TFC US Equity','TFX US Equity','TGNA US Equity','TGT US Equity','THC US Equity','TJX US Equity',
-          'TMO US Equity','TPR US Equity','TRMB US Equity','TROW US Equity','TSCO US Equity','TSN US Equity','TT US Equity','TTWO US Equity','TXN US Equity','TXT US Equity',
-          'TYL US Equity','UDR US Equity','UNH US Equity','UNM US Equity','UNP US Equity','UPS US Equity','URBN US Equity','URI US Equity','USB US Equity','VFC US Equity',
-          'VLO US Equity','VMC US Equity','VNO US Equity','VRSN US Equity','VRTX US Equity','VTR US Equity','VTRS US Equity','VZ US Equity','WBA US Equity','WDC US Equity',
-          'WEC US Equity','WELL US Equity','WFC US Equity','WHR US Equity','WM US Equity','WMB US Equity','WMT US Equity','WRB US Equity','WST US Equity','WTW US Equity',
-          'WY US Equity','WYNN US Equity','X US Equity','XEL US Equity','XOM US Equity','XRAY US Equity','YUM US Equity','ZBH US Equity','ZBRA US Equity','ZION US Equity',
-          'MOS US Equity']
+sp_prices_df  = sp500_stock_data.pivot(columns='ticker', index='date', values='PX_LAST')
+sp_mkt_cap_df = sp500_stock_data.pivot(columns='ticker', index='date', values='CUR_MKT_CAP')
+
+#Ajustando valores da data 2007-01-02 e igualando aos preços do dia anterior
+sp_mkt_cap_df.loc[pd.to_datetime('2007-01-02')] = sp_mkt_cap_df.loc[pd.to_datetime('2006-12-29')] 
+sp_prices_df.loc[pd.to_datetime('2007-01-02')]  = sp_prices_df.loc[pd.to_datetime('2006-12-29')] 
+
+# Mercado Fechado
+complete_stocks_prices = sp_prices_df.columns[sp_prices_df.isna().sum() == 0].tolist()
+complete_stocks_mkt_cap = sp_mkt_cap_df.columns[sp_mkt_cap_df.isna().sum() == 0].tolist()
+
+diff_prices_and_mkt_cap = list(set(complete_stocks_prices) - set(complete_stocks_mkt_cap))
+print("Diferenças entre os dois conjuntos")
+print(diff_prices_and_mkt_cap)
+
+sp_prices_df.drop(columns=['MOS US Equity', 'NRG US Equity'],inplace=True)
+sp_mkt_cap_df.drop(columns=['MOS US Equity', 'NRG US Equity'],inplace=True)
+
+sp_mkt_cap_df = sp_mkt_cap_df.ffill()
+sp_prices_df  = sp_prices_df.ffill()
+
+#Seleciona somente ações que stão presentes em todo o período
+complete_stocks = sp_prices_df.columns[sp_prices_df.isna().sum() == 0].tolist()
+sp_prices_complete_df = sp_prices_df[complete_stocks]
+sp_mkt_cap_complete_df = sp_mkt_cap_df[complete_stocks]
+
+#Seleciona top 100 ações no início do período
+top_100_stocks_mkt_cap_list = sp_mkt_cap_complete_df.iloc[0].nlargest(100).index.to_list()
+
+top_100_mkt_cap_prices_df = sp_prices_complete_df[top_100_stocks_mkt_cap_list]
+top_100_mkt_cap_df        = sp_mkt_cap_complete_df[top_100_stocks_mkt_cap_list]
+
+# Alinha as colunas dos dataframes
+top_100_mkt_cap_df = top_100_mkt_cap_df[top_100_mkt_cap_prices_df.columns]
 
 
-
-
-
-# Assuming sp500_prices is your DataFrame with S&P 500 prices
-sp_prices_df = sp500_prices.pivot(columns='ticker', index='date', values='PX_LAST')
-balanced_sp_prices_df = sp_prices_df[stocks].copy()
-balanced_sp_prices_df = balanced_sp_prices_df.ffill()
-
-p=0.5
-# Farei o treinamento da rede utilizando pesos diários para ter uma quantidade maior de pontos.
-
-
-mu_t_df = balanced_sp_prices_df.div(balanced_sp_prices_df.sum(axis=1), axis=0)
-
-
+#Cálculo dos pesos dos portfolios 
 
 # Calculate daily returns
-balanced_stocks_returns = np.log(balanced_sp_prices_df / balanced_sp_prices_df.shift(1))
+stocks_returns    = np.log(top_100_mkt_cap_prices_df / top_100_mkt_cap_prices_df.shift(1))
 sp500_idx_returns =  np.log(spx_index / spx_index.shift(1))
 
-mu_t_df = mu_t_df.reindex(balanced_stocks_returns.index, method='ffill')
+def periodic_rebalance(df, p=None, rebalance_fred = 'w'):
 
-# Calculate the monthly rebalanced market portfolio returns
-mkt_return_t_df = (mu_t_df * balanced_stocks_returns.shift(1)).sum(axis=1)
+    # Resample to monthly frequency, taking the last observation of each wperiod
+    resampled_df = df.resample(rebalance_fred).last()
+    
+    if p is not None:
+        # For DWP: apply power transformation
+        weights = resampled_df.apply(lambda x: x ** p, axis=0)
+    else:
+        # For market portfolio: no transformation
+        weights = resampled_df.copy()
+
+    # Normalize weights to sum to 1
+    weights = weights.div(weights.sum(axis=1), axis=0)
+    
+    weights_daily = weights.resample('D').ffill()
+    
+    return weights_daily
+
+mkt_portfolio_weights = top_100_mkt_cap_df.div(top_100_mkt_cap_df.sum(axis=1),axis=0)
 
 
+#DWP portfolio
+p = 0.5
+power_p_transform = mkt_portfolio_weights.apply(lambda mu: mu**p,axis=0 )
+dwp_portfolio_weights = power_p_transform.div(power_p_transform.sum(axis=1),axis=0 )
 
 
+# Calculo dos retornos dos portfolios
+# O shift nos pesos considera que as compras das ações com os pesos calculados em D0 
+# sejam efetuadas no final do dia, recebendo assim o retorno das ações no fechamento do dia seguinte
+
+#Retorno do portfólio de mercado
+mkt_return = (mkt_portfolio_weights.shift(1) * stocks_returns).sum(axis=1)
+
+# Retorno do Portfólio DWP
+dwp_return = (dwp_portfolio_weights.shift(1) * stocks_returns).sum(axis=1)
 
 
-class PortfolioModel(tf.keras.Model):
-    def __init__(self, network, stock_returns):
-        super().__init__()
-        self.network = network
-        self.stock_returns = tf.convert_to_tensor(stock_returns, dtype=tf.float32)
+##################################################
+# # MONTAGEM DAS AMOSTRAS DE TREINO E DE TESTE # #
+##################################################
+
+
+# Copiando os dados gerados anteriormente 
+# Pesos do Portfolio de mercado
+mu_t_df = mkt_portfolio_weights.copy()
+
+# Retorno das ações
+R_t_df =  stocks_returns.copy()
+
+#Retorno do portfólio de mercado
+#Iloc[1:] para iniciar as series em 2004-01-05 e eliminar os valores NaN decorrentes do calculo do retorno. 
+Y = tf.convert_to_tensor(mkt_return.iloc[1:], dtype=tf.float32)              # Retorno do portfólio de mercado
+X = tf.convert_to_tensor(mu_t_df.shift(1).iloc[1:].values, dtype=tf.float32) # Pesos de mercado
+
+# Prepare stock returns data (should align with training samples)
+stock_returns = tf.convert_to_tensor(R_t_df.iloc[1:].values, dtype=tf.float32)
+
+
+from sklearn.model_selection import train_test_split
+
+indices = np.arange(len(X))
+train_idx, test_idx = train_test_split(indices, test_size=0.1, shuffle=False)
+
+# Split datasets
+X_train = tf.convert_to_tensor(X.numpy()[train_idx], dtype=tf.float32)
+X_test  = tf.convert_to_tensor(X.numpy()[test_idx], dtype=tf.float32)
+
+Y_train = tf.convert_to_tensor(Y.numpy()[train_idx] , dtype=tf.float32)
+Y_test  = tf.convert_to_tensor(Y.numpy()[test_idx], dtype=tf.float32)
+
+stock_returns_train = tf.gather(stock_returns, train_idx)
+stock_returns_test = tf.gather(stock_returns, test_idx)
+
+ #100
+
+
+training_input = tf.concat([X_train, stock_returns_train], axis=1)
+test_input     = tf.concat([X_test, stock_returns_test], axis=1)
+
+input_dim =  training_input.shape[1] # 200
+
+##################################################
+############### DESIGN DA REDE ###################
+##################################################
+
+
+print("Check amostras")
+
+# Define the physics-informed neural network (PINN) model
+class PINN(tf.keras.Model):
+    def __init__(self, input_dim):
+        super(PINN, self).__init__()
+        self.dense1 = tf.keras.layers.Dense(50, activation='tanh', input_dim=input_dim)
+        self.dense2 = tf.keras.layers.Dense(50, activation='tanh',  kernel_regularizer=tf.keras.regularizers.l2(0.0001))
+        self.dense2 = tf.keras.layers.Dense(50, activation='tanh', kernel_regularizer=tf.keras.regularizers.l2(0.0001))
+        self.output_layer = tf.keras.layers.Dense(1, activation='softplus')
+
+    def call(self, inputs):
+        x   = inputs[:, 0:100]     # pesos de portfólio de mercado
+        r_t = inputs[:, 100:200]   # Retorno das ações
+        concat_input = tf.concat([x, r_t], axis=1)
+        hidden1 = self.dense1(concat_input)
+        hidden2 = self.dense2(hidden1)
+        output = self.output_layer(hidden2)
+        return output
+
+# Define the loss function (physics-informed loss)
+def custom_loss(model, x, ret, ret_mkt):
+    with tf.GradientTape(persistent=True) as tape:
+        tape.watch(x)
+        tape.watch(ret)
+        tape.watch(ret_mkt)
         
-    def train_step(self, data):
-        X_input, y_true = data
+        G_x_pred      = model(tf.concat([x, ret], axis=1)) # G(x) calculado pela rede
+        log_G_x_pred  = tf.math.log(G_x_pred) # + 1e-7 esse valor foi retirado do log. Ele estava lá para evitar log(0). Se aparecer será reinserido. 
         
-        with tf.GradientTape(persistent=True) as tape:
-            G = self.network(X_input)
-            
-            # Compute gradient of log(G) with respect to INPUTS (X)
-            with tf.GradientTape() as inner_tape:
-                inner_tape.watch(X_input)
-                log_G = tf.math.log(self.network(X_input))
+        grad_log_G_X = tape.gradient(log_G_x_pred, x)
+        
+        # Calculando os pesos do portfólio dados por G(x)
+        inner_prod = tf.reduce_sum(x*grad_log_G_X,axis=1)
+        gra_log_G_minus_1 = tf.add(grad_log_G_X,-1)
+        
+        #Garantir a dimensão dessas matrizes aqui -->> modelar vetorialmente 
+        sum_terms = tf.add(tf.transpose(gra_log_G_minus_1), inner_prod) 
+        pi_t = tf.multiply(grad_log_G_X, sum_terms) # weights
+        
+        #Calculando o retorno de pi_t
+        port_ret = tf.multiply(pi_t, ret,axis=1)
+        
                 
-            grad_log_G_X = inner_tape.gradient(log_G, X_input)
-            
-            # Compute portfolio weights (ensure gradient flow)
-            sum_term = tf.reduce_sum(X_input * grad_log_G_X, axis=1, keepdims=True)
-            pi_weights = X_input * (grad_log_G_X + 1 - sum_term)
-            
-            # Calculate portfolio returns
-            batch_returns = tf.gather(self.stock_returns, tf.range(tf.shape(X_input)[0]))
-            port_returns = tf.reduce_sum(pi_weights * batch_returns, axis=1)
-            
-            # Custom loss calculation
-            loss = -tf.reduce_mean(port_returns - tf.squeeze(y_true))
-            
+        del tape
 
-            
-        # Compute gradients and update weights
-        trainable_vars = self.network.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        
-        tf.print("X_input:", X_input)
-        tf.print("grad_log_G_X:", grad_log_G_X)
-        tf.print("pi_weights:", pi_weights)
-        tf.print("batch_returns:", batch_returns)
-        tf.print("port_returns:", port_returns)
-        
-        print("breakpoint")
+    # lss_func
+    gen_func_loss = -(port_ret - ret_mkt)
 
-        return {'loss': loss}
+    return tf.reduce_mean(tf.square(gen_func_loss))
 
 
+# Create and compile the PINN model
+model = PINN(input_dim=input_dim*2)
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-Y = tf.convert_to_tensor(mkt_return_t_df.iloc[2:].values, dtype=tf.float32)
-X = tf.convert_to_tensor(mu_t_df.iloc[2:].values, dtype=tf.float32)
+# Training loop
+num_epochs = 500
+for epoch in range(num_epochs):
+    with tf.GradientTape() as tape:
+        physics_loss_value = custom_loss(model, x = X_train, ret=stock_returns_train, ret_mkt=Y_train) 
+        data_loss_value = tf.reduce_mean(model( -(training_input) - Y_train) )
+        total_loss = physics_loss_value + data_loss_value
 
-# Usage example:
-# 1. First build the base network
-input_dim = X.shape[1] # Number of features per sample
-base_network = tf.keras.Sequential([
-    tf.keras.layers.Input(shape=(input_dim,)),
-    tf.keras.layers.Dense(30, activation='relu'),
-    tf.keras.layers.Dense(30, activation='relu'),
-    tf.keras.layers.Dense(30, activation='relu'),
-    tf.keras.layers.Dense(1)
-])
+    gradients = tape.gradient(total_loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-# 2. Prepare stock returns data (should align with training samples)
-stock_returns = tf.convert_to_tensor(balanced_stocks_returns.iloc[2:].values, dtype=tf.float32)
-
-# 3. Create custom model
-model = PortfolioModel(base_network, stock_returns)
-model.compile(optimizer=tf.keras.optimizers.Adam())
-
-# 4. Prepare data (X should be indexed to match stock_returns)
-train_dataset =tf.data.Dataset.from_tensor_slices((X, Y)).batch(32)
-
-# 5. Train using fit() - note we pass [X_train, y_train] as x argument
-model.fit(train_dataset, epochs=50)
-
-
-
+    if epoch % 100 == 0:
+        print(f"Epoch {epoch}/{num_epochs}, Total Loss: {total_loss.numpy()}, Physics Loss: {physics_loss_value.numpy()}, Data Loss: {data_loss_value.numpy()}")
+u_pred=model(test_input)
