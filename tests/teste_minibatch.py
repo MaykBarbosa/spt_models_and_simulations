@@ -200,86 +200,112 @@ input_dim =  training_input.shape[1] # 200
 ############### DESIGN DA REDE ###################
 ##################################################
 
-
-print("Check amostras")
-
-# Define the physics-informed neural network (PINN) model
 class PINN(tf.keras.Model):
     def __init__(self, input_dim):
         super(PINN, self).__init__()
-        self.dense1 = tf.keras.layers.Dense(50, activation='tanh', input_dim=input_dim)
-        self.dense2 = tf.keras.layers.Dense(50, activation='tanh',  kernel_regularizer=tf.keras.regularizers.l2(0.001))
-        self.dense2 = tf.keras.layers.Dense(50, activation='tanh', kernel_regularizer=tf.keras.regularizers.l2(0.001))
+        initializer = tf.keras.initializers.GlorotNormal()
+        
+        self.hidden_layers = [
+            tf.keras.layers.Dense(100, activation='tanh', kernel_initializer=initializer, input_dim=input_dim),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(90, activation='tanh', kernel_initializer=initializer, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(80, activation='tanh', kernel_initializer=initializer, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(60, activation='tanh', kernel_initializer=initializer, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(32, activation='tanh', kernel_initializer=initializer, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.2)
+        ]
+        
         self.output_layer = tf.keras.layers.Dense(1, activation='softplus')
 
     def call(self, inputs):
-        x   = inputs[:, 0:100]     # pesos de portfólio de mercado
-        r_t = inputs[:, 100:200]   # Retorno das ações
-        concat_input = tf.concat([x, r_t], axis=1)
-        hidden1 = self.dense1(concat_input)
-        hidden2 = self.dense2(hidden1)
-        output = self.output_layer(hidden2)
-        return output
+        # Split input into portfolio weights (x) and stock returns (r_t)
+        x = inputs[:, 0:100]
+        r_t = inputs[:, 100:200]
+        
+        # Concatenate and process through hidden layers
+        z = tf.concat([x, r_t], axis=1)
+        for layer in self.hidden_layers:
+            z = layer(z)
+            
+        return self.output_layer(z)
 
 # Define the loss function (physics-informed loss)
 def custom_loss(model, x, ret, ret_mkt):
     with tf.GradientTape(persistent=True) as tape:
         tape.watch(x)
         tape.watch(ret)
-        tape.watch(ret_mkt)
         
-        G_x_pred      = model(tf.concat([x, ret], axis=1)) # G(x) calculado pela rede
-        log_G_x_pred  = tf.math.log(G_x_pred) # + 1e-7 esse valor foi retirado do log. Ele estava lá para evitar log(0). Se aparecer será reinserido. 
+        G_x_pred = model(tf.concat([x, ret], axis=1))
+        log_G_x_pred = tf.math.log(G_x_pred + 1e-7)
         
         grad_log_G_X = tape.gradient(log_G_x_pred, x)
+        inner_prod = tf.reduce_sum(x * grad_log_G_X, axis=1)
+        gra_log_G_plus_1 = grad_log_G_X + 1
+        sum_terms = gra_log_G_plus_1 - tf.expand_dims(inner_prod, axis=1)
+        pi_t = sum_terms * x
         
-        # Calculando os pesos do portfólio dados por G(x)
-        inner_prod = tf.reduce_sum(x*grad_log_G_X,axis=1)
-        gra_log_G_plus_1 = tf.add(grad_log_G_X,1)
+        # Portfolio returns with safeguards
+        port_ret = tf.clip_by_value(
+            tf.reduce_sum(pi_t * ret, axis=1),
+            -0.95, 10.0
+        )
         
-        expanded_inner_prod  = tf.expand_dims(inner_prod, axis=1) # Broadcast para adicionar cada valor do vetor a todas as colunas da linha corerspondente  
-        
-        sum_terms = tf.add(gra_log_G_plus_1, -1*expanded_inner_prod) 
-        pi_t = tf.multiply(sum_terms, x) # 
-        
-        #Calculando o retorno de pi_t
-        port_ret = tf.reduce_sum(tf.multiply(pi_t, ret),axis=1)
+        # Cumulative returns calculation
+        gross_returns = 1 + port_ret
+        cumprod = tf.math.cumprod(gross_returns)
+        ret_acumulado = tf.clip_by_value(cumprod - 1, -0.99, 1e3)
 
-        gross_returns = 1 + port_ret                    # (1 + r_t)
-        cumprod = tf.math.cumprod(gross_returns)       # produto acumulado
-        ret_acumulado = cumprod - 1
+        # Market returns calculation
+        gross_mkt_returns = 1 + tf.clip_by_value(ret_mkt, -0.95, 10.0)
+        cumprod_mkt = tf.math.cumprod(gross_mkt_returns)
+        ret_acumulado_mkt = tf.clip_by_value(cumprod_mkt - 1, -0.99, 1e3)
 
-        gross_mkt_returns = 1 + ret_mkt                    
-        cumprod_mkt = tf.math.cumprod(gross_mkt_returns)  
-        ret_acumulado_mkt = cumprod_mkt - 1 
+    # Final loss calculation
+    safe_ret = tf.maximum(1 + ret_acumulado, 1e-7)
+    safe_ret_mkt = tf.maximum(1 + ret_acumulado_mkt, 1e-7)
+    log_excess_return = tf.math.log(safe_ret) - tf.math.log(safe_ret_mkt)
 
-        del tape
- 
-    # loss 
-    log_excess_return = tf.math.log(1 + ret_acumulado) - tf.math.log(1 + ret_acumulado_mkt)
-    loss = -tf.reduce_mean(log_excess_return)
+    return -tf.reduce_mean(log_excess_return)
 
-    if tf.math.reduce_any(tf.math.is_nan(loss)):
-        print("Loss não é valido:", loss.numpy())
+# Prepare dataset (NO SHUFFLING)
+batch_size = 63
+dataset = tf.data.Dataset.from_tensor_slices(
+    (X_train, stock_returns_train, Y_train)
+).batch(batch_size)
 
-    return loss
+# Model Compilation
+model = PINN(input_dim=200)  # 100 (x) + 100 (r_t) = 200
+optimizer = tf.keras.optimizers.Adam(
+    learning_rate=0.001,
+    global_clipnorm=1.0
+)
 
-
-# Create and compile the PINN model
-model = PINN(input_dim=input_dim*2)
-optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-
-# Training loop
-num_epochs = 500
+# Training loop (batches processed in sequence)
+num_epochs = 50
 for epoch in range(num_epochs):
-    with tf.GradientTape() as tape:
-        physics_loss_value = custom_loss(model, x = X_train, ret=stock_returns_train, ret_mkt=Y_train) 
-        total_loss = physics_loss_value
+    epoch_loss = 0
+    num_batches = 0
+    for x_batch, ret_batch, ret_mkt_batch in dataset:
+        with tf.GradientTape() as tape:
+            physics_loss_value = custom_loss(model, x_batch, ret_batch, ret_mkt_batch)
+            total_loss = physics_loss_value
 
-    gradients = tape.gradient(total_loss, model.trainable_variables)
-    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+        gradients = tape.gradient(total_loss, model.trainable_variables)
+        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+        
+        epoch_loss += total_loss.numpy()
+        num_batches += 1
 
-    if epoch % 100 == 0:
-        print(f"Epoch {epoch}/{num_epochs}, Total Loss: {total_loss.numpy()}, Physics Loss: {physics_loss_value.numpy()}")
+    avg_epoch_loss = epoch_loss / num_batches
+ 
+    print(f"Epoch {epoch}/{num_epochs}, Avg Loss: {avg_epoch_loss}")
+
 print("fim")
-#u_pred=model(test_input)
