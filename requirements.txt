@@ -1,11 +1,12 @@
 tensorflow
+tensorflow_probability
 scikit-learn
 xgboost
-tensorflow
 torch
 torchvision
 torchaudio
 keras
+tf-keras
 pandas
 numpy
 scipy
