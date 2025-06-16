@@ -10,6 +10,7 @@ tf-keras
 pandas
 numpy
 scipy
+statsmodels
 matplotlib
 seaborn
 xbbg
