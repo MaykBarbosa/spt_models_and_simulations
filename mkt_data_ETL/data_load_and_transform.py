@@ -9,25 +9,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-from data_extraction import save_raw_data
+#from mkt_data_ETL.data_extraction import save_raw_data
 
 
-
-# Uncomment and execute the function below only if you want to extract the data
-# erros= save_raw_data()
-
-def get_calendar(is_wirkingday=True):
-    
-    # As datas abaixo não possuem preços e serão removidas do banco de dados
-    # 2004-06-11 -> Bolsas fechadas devido ao funeral de Ronald Reagan
-    # 2012-10-29 e 2012-10-30 -> Bolsas fechadas devido ao furacão Sandy
-    # 2020-11-26 -> Thanks giving não mapeado no meu banco de dias úteis
-
-    # Na data 2007-01-02 não há preços para nenhuma ações devido a algum problema não encontrado. Nessa data, os preços do dia anterior serão repetidos.
-
+def get_calendar(is_workingday=True):
 
     calendar =  pd.read_csv(os.path.join(os.environ['FILES_PATH'], 'working_days_calendar.csv'), sep=',')
-    if is_wirkingday:
+    if is_workingday:
         calendar = calendar[(calendar['code']=='cme') & (calendar['workingday']==1)]
     else:
         calendar = calendar[calendar['code']=='cme']
@@ -46,7 +34,7 @@ def load_and_transform_shares(files_path):
     stock_shares_pivot_df = stock_shares_pivot_df.loc[:pd.to_datetime('2025-01-01')]
 
     # Get all days in cme calendar
-    calendar = get_calendar(is_wirkingday=False)
+    calendar = get_calendar(is_workingday=False)
     calendar=calendar[(calendar['date'] >= pd.to_datetime('2001-01-01')) & (calendar['date'] <= pd.to_datetime('2024-12-31'))]
 
     # Reindex with all dates
@@ -57,7 +45,7 @@ def load_and_transform_shares(files_path):
 def load_and_transform_prices(files_path):
 
     stock_prices_df= pd.read_csv(os.path.join(files_path, "prices_df_eodhd.csv"))
-    prices_df = prices_df[['date','adjusted_close', 'comp_name']].pivot(index='date', columns='comp_name', values='adjusted_close')
+    stock_prices_df = stock_prices_df[['date','adjusted_close', 'comp_name']].pivot(index='date', columns='comp_name', values='adjusted_close')
     stock_prices_df.index = pd.to_datetime(stock_prices_df.index)
     stock_prices_df = stock_prices_df.loc[:pd.to_datetime('2025-01-01')]
 
@@ -66,11 +54,14 @@ def load_and_transform_prices(files_path):
     sp500_prices_df.index = pd.to_datetime(sp500_prices_df.index)
     sp500_prices_df = sp500_prices_df.loc[:pd.to_datetime('2025-01-01')]
 
-    return stock_prices_df
+    return stock_prices_df, sp500_prices_df
 
 
 def get_data(start_date = '2004-01-01', end_date = '2024-12-31'):
     FILES_PATH = os.environ['FILES_PATH']
+
+    # Uncomment and execute the function below only if you want to extract the data
+    #erros=save_raw_data()
 
     stock_shares_amount_df            = load_and_transform_shares(files_path=FILES_PATH)
     stock_prices_df, sp500_prices_df  = load_and_transform_prices(files_path=FILES_PATH)
@@ -81,7 +72,7 @@ def get_data(start_date = '2004-01-01', end_date = '2024-12-31'):
 
     # Fixing only columns that exists in both dataframes
     stock_prices_df        = stock_prices_df[cols_intersec]
-    stock_shares_amount_df = stock_prices_df[cols_intersec]
+    stock_shares_amount_df = stock_shares_amount_df[cols_intersec]
 
     # Reindex the shares df with the prices_df to align the dataframe index because prices are our reference
     stock_shares_amount_df = stock_shares_amount_df.reindex(stock_prices_df.index)
@@ -94,6 +85,27 @@ def get_data(start_date = '2004-01-01', end_date = '2024-12-31'):
     stock_prices_df        = stock_prices_df.loc[pd.to_datetime(start_date):pd.to_datetime(end_date)]
     stock_shares_amount_df = stock_shares_amount_df.loc[pd.to_datetime(start_date):pd.to_datetime(end_date)]
     mkt_cap_df             = mkt_cap_df.loc[pd.to_datetime(start_date):pd.to_datetime(end_date)]
+    sp500_prices_df        = sp500_prices_df.loc[pd.to_datetime(start_date):pd.to_datetime(end_date)]
 
     return stock_prices_df, stock_shares_amount_df, mkt_cap_df, sp500_prices_df, removed_companies
 
+def get_top_mkt_cap_stocks(stock_prices_df, stock_mkt_cap_df):
+    """
+        Selects the top 100 stocks by market capitalization at the start of the period and returns two dataframes: 
+        one with market capitalizations and the other with the prices of those stocks.
+    """
+    
+    # Select only stocks that are present in the whole period
+    complete_stocks = stock_prices_df.columns[stock_prices_df.isna().sum() == 0].tolist()
+    sp_prices_complete_df = stock_prices_df[complete_stocks]
+    sp_mkt_cap_complete_df = stock_mkt_cap_df[complete_stocks]
+
+    # Select the top 100 stocks by market capitalization at the start of the period
+    top_100_stocks_mkt_cap_list = sp_mkt_cap_complete_df.iloc[0].nlargest(100).index.to_list()
+    top_100_mkt_cap_prices_df = sp_prices_complete_df[top_100_stocks_mkt_cap_list]
+    top_100_mkt_cap_df        = sp_mkt_cap_complete_df[top_100_stocks_mkt_cap_list]
+
+    # Align the columns of the dataframes
+    top_100_mkt_cap_df = top_100_mkt_cap_df[top_100_mkt_cap_prices_df.columns]
+
+    return top_100_mkt_cap_df, top_100_mkt_cap_prices_df

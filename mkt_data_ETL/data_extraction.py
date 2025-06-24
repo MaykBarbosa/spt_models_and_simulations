@@ -86,7 +86,7 @@ def get_SP500_eodhd(start_date, end_date,API_KEY):
     url = f'https://eodhd.com/api/eod/GSPC.INDX?from={start_date}&to={end_date}&period=d&api_token={API_KEY}&fmt=json'
     data = requests.get(url).json()
     sp500_prices_df = pd.DataFrame(data)
-    sp500_prices_df = ['comp_name'] = 'SP500'
+    sp500_prices_df['comp_name'] = 'SP500'
 
     return sp500_prices_df
 
