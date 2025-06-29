@@ -61,7 +61,7 @@ def get_data(start_date = '2004-01-01', end_date = '2024-12-31'):
     FILES_PATH = os.environ['FILES_PATH']
 
     # Uncomment and execute the function below only if you want to extract the data
-    erros=save_raw_data()
+    # erros=save_raw_data()
 
     stock_shares_amount_df            = load_and_transform_shares(files_path=FILES_PATH)
     stock_prices_df, sp500_prices_df  = load_and_transform_prices(files_path=FILES_PATH)
